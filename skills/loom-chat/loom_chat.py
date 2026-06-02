@@ -41,7 +41,8 @@ Exit codes:
   0  success
   2  usage error (includes a body over the resolved cap)
   3  detect: no reachable Loom MCP server found
-  4  runtime error (not registered, transport/server failure)
+  4  runtime error (not registered, transport/server failure, or any
+     server-side tool error)
 
 Env overrides:
   LOOM_MCP_URL    explicit MCP url; if set, detection probes ONLY this url
@@ -291,13 +292,27 @@ def _call_tool(url, session_id, tool, args):
     res, _ = _post(url, payload, session_id)
     if res is None:
         raise RuntimeError("empty response from server")
-    if "error" in res:
+    if "error" in res:  # JSON-RPC transport/protocol error
         raise RuntimeError("loom error: %s" % json.dumps(res["error"]))
     # MCP tool result: { result: { content: [ { type:text, text: "..." } ] } }
-    content = res.get("result", {}).get("content", [])
+    result = res.get("result", {})
+    content = result.get("content", []) if isinstance(result, dict) else []
     text = "".join(c.get("text", "") for c in content if c.get("type") == "text")
+    # Tool-level failure: a SUCCESSFUL JSON-RPC result carrying isError == true.
+    # Loom encodes the detail in structuredContent {code, message} (and the
+    # content text as "CODE: message"). Surface it as a RuntimeError so it
+    # routes through main()'s boundary to exit 4 instead of a false success.
+    if isinstance(result, dict) and result.get("isError"):
+        sc = result.get("structuredContent")
+        if isinstance(sc, dict) and sc.get("code"):
+            detail = "%s: %s" % (sc.get("code"), sc.get("message", ""))
+        elif text:
+            detail = text
+        else:
+            detail = "tool error"
+        raise RuntimeError(detail)
     try:
-        return json.loads(text) if text else res.get("result")
+        return json.loads(text) if text else result
     except json.JSONDecodeError:
         return text
 
