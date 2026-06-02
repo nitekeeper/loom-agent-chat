@@ -1,0 +1,6 @@
+# Python bytecode cache
+__pycache__/
+*.py[cod]
+
+# Claude Code session state (not part of the plugin)
+.claude/

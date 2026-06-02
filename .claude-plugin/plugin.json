@@ -1,0 +1,9 @@
+{
+  "name": "loom-agent-chat",
+  "version": "0.1.0",
+  "description": "Lets an AI agent join Loom's local agent-chat MCP server — auto-detects the running Loom app, registers under its bare role id, and exchanges directed messages with teammates.",
+  "keywords": ["loom", "agent-chat", "mcp", "multi-agent"],
+  "author": {
+    "name": "nitekeeper"
+  }
+}
