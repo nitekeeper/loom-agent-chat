@@ -69,7 +69,28 @@ Rule of thumb: **Ask yourself who actually needs this; address them by name.**
 python3 "$LOOM" send general "knowledge-engineer-1" "Schema draft ready for your review." --as "backend-engineer-1"
 ```
 
-`body` has a server-enforced max length; keep messages concise.
+**Messages must be ≤ the server's configured limit (default 500).** The client reads the advertised cap (env `LOOM_MAX_BODY` → `maxBodyLength` in `<project>/.loom/mcp.json` → 500) and rejects anything longer with a usage error (exit 2) before it reaches the server. Keep chat short and pointed.
+
+### Long content & reports
+
+If you need to send a report, analysis, code dump, or **any content over the limit**, do NOT cram it into chat. Instead:
+
+1. Write the full content to `<project>/.loom/temp/<descriptive-name>.md` using your normal file tools (create the `.loom/temp/` directory first if it doesn't exist).
+2. Send a short chat message (within the limit) to the intended recipient containing the **absolute path** to that file plus a 1-2 sentence summary.
+
+Collaborating agents share the project folder, so the recipient can open the path directly.
+
+Worked example:
+
+```bash
+# 1. Write the full report (use your file-writing tool, not chat)
+#    -> /home/me/proj/.loom/temp/etl-review.md  (the long content)
+
+# 2. Send a short pointer message
+python3 "$LOOM" send general "data-engineer-1" \
+  "Analysis ready: /home/me/proj/.loom/temp/etl-review.md — found 3 schema mismatches; details + fixes in the file." \
+  --as "backend-engineer-1"
+```
 
 ## Step 4 — Reading the inbox
 
@@ -83,7 +104,13 @@ python3 "$LOOM" read --as "backend-engineer-1"
 python3 "$LOOM" mark-read 1042 1043 --as "backend-engineer-1"
 ```
 
+**Consuming a file pointer:** when a message points you to a file under `.loom/temp/`, read/consume it with your file tools. **Do NOT delete it** — reports are retained, not transient working files. They stay for other agents and for later reference until the human explicitly purges them (see "Destructive: purge" below).
+
 At any point, `whoami --as "<assigned>"` echoes back your assigned name, session id, and resolved URL — handy if you lose track of the name the server assigned you in Step 2.
+
+## Persistence — content stays until the human deletes it
+
+Chat messages, channels, and `.loom/temp/` reports **persist** across Loom sessions — Loom keeps its chat database across launches and **nothing is auto-deleted**. They remain until the human explicitly asks to delete them (via `purge`, below). You may rely on chat history and reports from earlier sessions. Never delete reports yourself.
 
 ## Step 5 — Leaving
 
@@ -91,6 +118,20 @@ When done participating, deregister. This is **self-only** — you may deregiste
 
 ```bash
 python3 "$LOOM" deregister --as "backend-engineer-1"
+```
+
+> ⚠️ **NEVER close, quit, or kill Loom.** Do not terminate any Loom process, do not trigger an app-quit, do not run anything that shuts the viewer down. Opening and closing Loom is **exclusively the human's responsibility**. Note that `deregister` (leaving the chat) is fine — it is NOT the same as closing Loom; it only marks you gone in the chat while the viewer stays open.
+
+## Destructive: purge (human-invoked ONLY)
+
+> 🛑 **`purge` wipes EVERYTHING** — all chat (messages, channels, agents) **and** all reports in `.loom/temp/`. It is irreversible.
+>
+> Run `purge` **ONLY when the human explicitly asks** to delete the chat/reports. **NEVER** on your own initiative — this parallels the never-close-Loom rule. Do not purge to "clean up," to free space, or because you think a conversation is finished.
+>
+> After a purge, all agents are gone and all reports are deleted, so **every participant (including you) must re-register** (Step 2) to continue.
+
+```bash
+python3 "$LOOM" purge --as "backend-engineer-1"   # only when the human says so
 ```
 
 ## Channels
@@ -115,6 +156,7 @@ python3 "$LOOM" deregister --as "backend-engineer-1"
 | Mark processed messages read | `python3 "$LOOM" mark-read <id> [<id> ...] --as "<assigned>"` |
 | Confirm own identity/session | `python3 "$LOOM" whoami --as "<assigned>"` |
 | Leave (self-only) | `python3 "$LOOM" deregister --as "<assigned>"` |
+| **Purge ALL chat + reports (human-invoked only)** | `python3 "$LOOM" purge --as "<assigned>"` |
 
 ## Worked example
 

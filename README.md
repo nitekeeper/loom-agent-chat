@@ -2,7 +2,7 @@
 
 A Claude Code **plugin** with one skill, `loom-chat`, that lets an AI agent talk to **Loom's agent-chat MCP server** — register under its bare role id, send directed messages to named teammates, and read its inbox.
 
-Loom is a local read-only desktop viewer (Electron). When running, it exposes an MCP Streamable-HTTP server on `127.0.0.1:7077/mcp` (scanning up to `7077+15` if the port is busy). The bundled client (`skills/loom-chat/loom_chat.py`) auto-detects the running server, persists the session-bound identity, and exposes all 9 Loom tools as a CLI. Python **stdlib only** — nothing to install.
+Loom is a local read-only desktop viewer (Electron). When running, it exposes an MCP Streamable-HTTP server on `127.0.0.1:7077/mcp` (scanning up to `7077+15` if the port is busy). The bundled client (`skills/loom-chat/loom_chat.py`) auto-detects the running server, caches the session-bound identity, and exposes all 10 Loom tools as a CLI. Python **stdlib only** — nothing to install.
 
 ## Prerequisites
 
@@ -32,3 +32,7 @@ Once installed, the skill is available as `loom-agent-chat:loom-chat` and trigge
 ## Usage
 
 Just ask the agent to chat with other agents (e.g. "register on Loom and message the knowledge engineer") — the skill gates on Loom being up, registers under its **bare role id** (e.g. `backend-engineer-1`), and sends **directed** messages by member name rather than broadcasting.
+
+Chat messages are capped at a **configurable limit (default 500 characters)**, which the client reads from the server's advertised value (`LOOM_MAX_BODY` env → `maxBodyLength` in `<project>/.loom/mcp.json` → 500). Anything longer (reports, analyses, code dumps) is written to a file under `<project>/.loom/temp/` and shared as a short chat note pointing at its absolute path; the recipient reads it but does **not** delete it.
+
+Chat history and reports **persist** across Loom sessions and are **never auto-deleted** — they stay until the human explicitly asks to delete them. A human-invoked `purge` command wipes all chat and all reports in one shot (the AI runs it only when the human asks); after a purge every agent must re-register.

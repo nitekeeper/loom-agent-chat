@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """loom_chat.py — tiny MCP Streamable-HTTP client for Loom's agent chat.
 
-Loom (the read-only desktop viewer) exposes a 9-tool MCP server on
+Loom (the read-only desktop viewer) exposes a 10-tool MCP server on
 http://127.0.0.1:7077/mcp. Detection first reads <project>/.loom/mcp.json (the
 endpoint file Loom writes per project, identifying the instance serving this
 folder), then falls back to scanning the next ports up to 7077+15. Every
@@ -21,21 +21,32 @@ Usage:
   loom_chat.py read [channel]                 --as <name>
   loom_chat.py mark-read <id> [<id> ...]      --as <name>
   loom_chat.py deregister                     --as <name>
+  loom_chat.py purge                          --as <name>
   loom_chat.py whoami                         --as <name>
 
 `to` is a teammate's member name for a direct message, or "@here" to broadcast
 to all other channel members. After register, `<name>` may be auto-suffixed by
 the server (scout -> scout-2); always use the printed assigned name with --as.
 
+Message bodies are capped; the cap is configurable (default 500). It is read
+from the server's advertised value: env LOOM_MAX_BODY -> maxBodyLength in
+<project>/.loom/mcp.json -> 500. `send` rejects anything longer (exit 2) --
+offload long content to a file under <project>/.loom/temp/ and send a short
+note with its absolute path + a 1-2 sentence summary instead.
+
+`purge` (human-invoked only) calls the server's purge_all tool, deleting ALL
+chat and ALL reports in .loom/temp/. Everyone must re-register afterward.
+
 Exit codes:
   0  success
-  2  usage error
+  2  usage error (includes a body over the resolved cap)
   3  detect: no reachable Loom MCP server found
   4  runtime error (not registered, transport/server failure)
 
 Env overrides:
   LOOM_MCP_URL    explicit MCP url; if set, detection probes ONLY this url
   LOOM_STATE_DIR  session/state cache dir (default /tmp/loom_sessions)
+  LOOM_MAX_BODY   override the message-body cap (integer; default 500)
 """
 import json
 import os
@@ -50,6 +61,7 @@ STATE_DIR = os.environ.get("LOOM_STATE_DIR", "/tmp/loom_sessions")
 PROTOCOL = "2024-11-05"
 BASE_PORT = 7077
 MAX_ATTEMPTS = 16  # scan 7077 .. 7077+15
+DEFAULT_MAX_BODY = 500  # fallback per-message body cap when none is advertised
 URL_CACHE = os.path.join(STATE_DIR, "_url.json")
 
 
@@ -141,16 +153,28 @@ def _endpoint_file_path():
     return os.path.join(os.getcwd(), ".loom", "mcp.json")
 
 
-def _endpoint_file_url():
-    """Read <cwd>/.loom/mcp.json and return its url, or None if absent/invalid.
+def _read_endpoint_file():
+    """Parse <cwd>/.loom/mcp.json and return the dict, or None if absent/bad.
 
-    No liveness check here — the caller probes it. A stale file left by a crash
-    is rejected by the probe, not by this reader.
+    Single reader for the project endpoint file; other helpers derive specific
+    fields (url, maxBodyLength) from its result.
     """
     try:
         with open(_endpoint_file_path()) as f:
             data = json.load(f)
     except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _endpoint_file_url():
+    """URL advertised by <cwd>/.loom/mcp.json, or None if absent/invalid.
+
+    No liveness check here — the caller probes it. A stale file left by a crash
+    is rejected by the probe, not by this reader.
+    """
+    data = _read_endpoint_file()
+    if not data:
         return None
     url = data.get("url")
     if url:
@@ -160,6 +184,29 @@ def _endpoint_file_url():
     if isinstance(port, int):
         return "http://127.0.0.1:%d/mcp" % port
     return None
+
+
+def _resolve_max_body():
+    """Resolve the per-message body cap (chars).
+
+    Precedence: env LOOM_MAX_BODY (integer) -> maxBodyLength advertised in
+    <cwd>/.loom/mcp.json -> DEFAULT_MAX_BODY. Invalid/non-positive values at any
+    tier are ignored and we fall through to the next.
+    """
+    env = os.environ.get("LOOM_MAX_BODY")
+    if env is not None:
+        try:
+            n = int(env)
+            if n > 0:
+                return n
+        except ValueError:
+            pass
+    data = _read_endpoint_file()
+    if data:
+        n = data.get("maxBodyLength")
+        if isinstance(n, int) and not isinstance(n, bool) and n > 0:
+            return n
+    return DEFAULT_MAX_BODY
 
 
 def _discover():
@@ -342,6 +389,21 @@ def _run(argv):
 
     as_name, rest = _parse_as(argv)
 
+    # Validate send args + the message-body cap up front, before any session
+    # lookup or network call -- both are pure usage errors (exit 2) regardless
+    # of registration state, and we must never send an over-length body.
+    if cmd == "send":
+        if len(rest) < 3:
+            raise UsageError("send requires <channel> <to> <body...>")
+        body = " ".join(rest[2:])
+        max_body = _resolve_max_body()
+        if len(body) > max_body:
+            raise UsageError(
+                "message body is %d chars (max %d). Do NOT send long content "
+                "as chat -- write it to %s/.loom/temp/<name>.md and send a "
+                "short note with the file's absolute path + a 1-2 sentence "
+                "summary." % (len(body), max_body, os.getcwd()))
+
     if cmd == "register":
         if not rest:
             raise UsageError("register requires a <name>")
@@ -378,9 +440,12 @@ def _run(argv):
     elif cmd == "deregister":
         # self-only: caller may deregister only its own assigned name
         print(json.dumps(_call_tool(url, sid, "deregister", {"name": assigned})))
+    elif cmd == "purge":
+        # DESTRUCTIVE: wipes ALL chat + ALL reports in .loom/temp/. Human-
+        # invoked only. After this everyone is gone -> callers must re-register.
+        print(json.dumps(_call_tool(url, sid, "purge_all", {})))
     elif cmd == "send":
-        if len(rest) < 3:
-            raise UsageError("send requires <channel> <to> <body...>")
+        # args + body length already validated up front (resolved cap)
         channel, to = rest[0], rest[1]
         body = " ".join(rest[2:])
         print(json.dumps(_call_tool(url, sid, "send_message",
