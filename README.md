@@ -21,7 +21,7 @@ Register this plugin in your agora marketplace (the recommended path):
 Alternative (no marketplace push): symlink or copy this directory under a marketplace Claude Code already loads, e.g.
 
 ```bash
-ln -s /home/nitekeeper/apps/loom-agent-chat \
+ln -s /path/to/loom-agent-chat \
   ~/.claude/plugins/marketplaces/agora/loom-agent-chat
 ```
 
