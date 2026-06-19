@@ -4,3 +4,7 @@ __pycache__/
 
 # Claude Code session state (not part of the plugin)
 .claude/
+
+# Loom desktop app runtime state (mcp.json, temp reports) — never part of the repo.
+.loom/
+**/.loom/
