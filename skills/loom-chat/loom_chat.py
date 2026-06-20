@@ -49,9 +49,9 @@ Env overrides:
   LOOM_STATE_DIR  session/state cache dir (default /tmp/loom_sessions)
   LOOM_MAX_BODY   override the message-body cap (integer; default 500)
 """
+
 import json
 import os
-import socket
 import sys
 import urllib.error
 import urllib.request
@@ -100,7 +100,7 @@ def _post(url, payload, session_id=None, timeout=20):
         for line in raw.splitlines():
             line = line.strip()
             if line.startswith("data:"):
-                result = json.loads(line[len("data:"):].strip())
+                result = json.loads(line[len("data:") :].strip())
                 break
         if result is None and raw.lstrip().startswith("{"):
             result = json.loads(raw)
@@ -109,9 +109,14 @@ def _post(url, payload, session_id=None, timeout=20):
 
 def _init_payload():
     return {
-        "jsonrpc": "2.0", "id": 1, "method": "initialize",
-        "params": {"protocolVersion": PROTOCOL, "capabilities": {},
-                   "clientInfo": {"name": "loom_chat", "version": "1.0"}},
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": PROTOCOL,
+            "capabilities": {},
+            "clientInfo": {"name": "loom_chat", "version": "1.0"},
+        },
     }
 
 
@@ -123,8 +128,14 @@ def _probe(url, timeout=2):
     """
     try:
         res, sid = _post(url, _init_payload(), timeout=timeout)
-    except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout,
-            ConnectionError, OSError, ValueError):
+    except (
+        TimeoutError,
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        ConnectionError,
+        OSError,
+        ValueError,
+    ):
         return None
     if not res or not sid:
         return None
@@ -287,8 +298,12 @@ def _new_session(url):
 
 
 def _call_tool(url, session_id, tool, args):
-    payload = {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-               "params": {"name": tool, "arguments": args}}
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {"name": tool, "arguments": args},
+    }
     res, _ = _post(url, payload, session_id)
     if res is None:
         raise RuntimeError("empty response from server")
@@ -326,15 +341,13 @@ def _load(name):
         with open(_state_path(name)) as f:
             return json.load(f)
     except (FileNotFoundError, ValueError):
-        raise NotRegisteredError(
-            "not registered as %s — run register first" % name)
+        raise NotRegisteredError("not registered as %s — run register first" % name) from None
 
 
 def _save(name, url, sid, assigned):
     os.makedirs(STATE_DIR, exist_ok=True)
     with open(_state_path(name), "w") as f:
-        json.dump({"requested": name, "assigned": assigned,
-                   "session_id": sid, "url": url}, f)
+        json.dump({"requested": name, "assigned": assigned, "session_id": sid, "url": url}, f)
 
 
 def _session_for(name):
@@ -368,8 +381,7 @@ def _cmd_detect():
         print(json.dumps({"available": False}))
         return 3
     _cache_url(url)
-    print(json.dumps({"available": True, "url": url,
-                      "port": _port_of(url), "source": source}))
+    print(json.dumps({"available": True, "url": url, "port": _port_of(url), "source": source}))
     return 0
 
 
@@ -417,7 +429,8 @@ def _run(argv):
                 "message body is %d chars (max %d). Do NOT send long content "
                 "as chat -- write it to %s/.loom/temp/<name>.md and send a "
                 "short note with the file's absolute path + a 1-2 sentence "
-                "summary." % (len(body), max_body, os.getcwd()))
+                "summary." % (len(body), max_body, os.getcwd())
+            )
 
     if cmd == "register":
         if not rest:
@@ -463,8 +476,11 @@ def _run(argv):
         # args + body length already validated up front (resolved cap)
         channel, to = rest[0], rest[1]
         body = " ".join(rest[2:])
-        print(json.dumps(_call_tool(url, sid, "send_message",
-                                    {"channel": channel, "to": to, "body": body})))
+        print(
+            json.dumps(
+                _call_tool(url, sid, "send_message", {"channel": channel, "to": to, "body": body})
+            )
+        )
     elif cmd == "inbox":
         print(json.dumps(_call_tool(url, sid, "check_inbox", {})))
     elif cmd == "read":
@@ -476,7 +492,7 @@ def _run(argv):
         try:
             ids = [int(x) for x in rest]
         except ValueError:
-            raise UsageError("mark-read ids must be integers")
+            raise UsageError("mark-read ids must be integers") from None
         print(json.dumps(_call_tool(url, sid, "mark_read", {"message_ids": ids})))
     else:
         raise UsageError("unknown command: %s" % cmd)

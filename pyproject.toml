@@ -1,0 +1,37 @@
+[project]
+name = "loom-agent-chat"
+version = "0.1.0"
+description = "Loom agent-chat plugin: a stdlib-only MCP client letting an AI agent join Loom's local agent-chat server."
+requires-python = ">=3.11"
+
+# ----------------------------------------------------------------------------
+# Lint & format — Ruff
+# ----------------------------------------------------------------------------
+# This is a stdlib-only project (no third-party deps). Ruff replaces
+# flake8 / isort / pyupgrade here with a pragmatic rule set: catch real bugs
+# and stale syntax, avoid stylistic bikeshed.
+# Run locally:  ruff check --fix && ruff format
+# CI enforces:  ruff check && ruff format --check
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (unused imports, undefined names)
+    "I",    # isort (import ordering)
+    "B",    # flake8-bugbear (likely bugs)
+    "C4",   # comprehensions
+    "UP",   # pyupgrade (modern syntax)
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",    # line-too-long — the formatter handles wrapping where it can; long URLs/strings get a pass
+    "UP031",   # printf-style %-format — the client deliberately uses %-format consistently throughout
+               # (a single-module stdlib script); a blanket rewrite to f-strings/.format is stylistic
+               # bikeshed, not a bug fix, and risks subtle changes in the multi-line error strings.
+]

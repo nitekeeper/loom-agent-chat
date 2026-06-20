@@ -1,0 +1,34 @@
+name: CI
+
+# Fast PR gate: lint + format. This is a stdlib-only single-module plugin
+# with no test suite yet, so the gate is Ruff-only. Both checks must pass
+# before a PR can be merged (enforced via branch protection rules).
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & format (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Lint (ruff check)
+        run: ruff check .
+
+      - name: Format check (ruff format --check)
+        run: ruff format --check .
